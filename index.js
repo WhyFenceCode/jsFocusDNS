@@ -2,21 +2,27 @@ const dns2 = require('dns2');
 
 const { Packet } = dns2;
 
+const resolveUpstream = new dns2({
+  dns: '8.8.8.8',
+  port: 53,
+  timeout: 2000,
+  retries: 1,
+});
+
 const server = dns2.createServer({
   udp: true,
-  handle: (request, send, rinfo) => {
-    const response = Packet.createResponseFromRequest(request);
-    const [ question ] = request.questions;
-    const { name } = question;
-    response.answers.push({
-      name,
-      type: Packet.TYPE.A,
-      class: Packet.CLASS.IN,
-      ttl: 300,
-      address: '8.8.8.8'
-    });
-    send(response);
-  }
+  tcp: true,
+  handle: async (request, send, rinfo) => {
+    try {
+      const response = await resolveUpstream(request);
+      response.header.ra = 1;
+      send(response);
+    } catch (err) {
+      const failure = Packet.createResponseFromRequest(request);
+      failure.header.rcode = 2;
+      send(failure);
+    }
+  },
 });
 
 server.on('request', (request, response, rinfo) => {
@@ -43,7 +49,7 @@ server.listen({
   },
   
   tcp: { 
-    port: 5333,
+    port: 53,
     address: "127.0.0.1",
   },
 });
