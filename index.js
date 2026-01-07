@@ -7,6 +7,7 @@ const upstreamHost = '8.8.8.8';
 const blockList = [
   'reddit.com'
 ];
+let isBlocking = false;
 
 function sendDnsPacket(packetBuffer, upstreamPort = 53) {
   return new Promise((resolve, reject) => {
@@ -31,21 +32,37 @@ function sendDnsPacket(packetBuffer, upstreamPort = 53) {
   });
 }
 
+function blockTest(request) {
+  let questions = request.questions;
+  let requestBlocked = questions.every(item => blockList.includes(item.name));
+  if (requestBlocked && isBlocking) {
+    return true;
+  } else {
+    return false;
+  }
+}
+
 const server = dns2.createServer({
   udp: true,
   tcp: true,
   handle: async (request, send, rinfo) => {
     let output = null;
-
-    try {
-      const packet = request.toBuffer();
-      const response = await sendDnsPacket(packet);
-      output = response; 
-    } catch (err) {
-      const failure = Packet.createResponseFromRequest(request);
-      console.log(err);
-      failure.header.rcode = 2;
-      output = failure;
+    let siteAllowed = !blockTest(request);
+    if (siteAllowed){
+      try {
+        const packet = request.toBuffer();
+        const response = await sendDnsPacket(packet);
+        output = response; 
+      } catch (err) {
+        const failure = Packet.createResponseFromRequest(request);
+        console.log(err);
+        failure.header.rcode = 2;
+        output = failure;
+      }
+    } else {
+      const blocked = Packet.createResponseFromRequest(request);
+      blocked.header.rcode = 5;
+      output = blocked;
     }
     
     send(output);
