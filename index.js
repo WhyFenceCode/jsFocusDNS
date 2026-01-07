@@ -2,8 +2,11 @@ const dns2 = require('dns2');
 const dgram = require("dgram");
 
 const { Packet } = dns2;
-
 const upstreamHost = '8.8.8.8';
+
+const blockList = [
+  'reddit.com'
+];
 
 function sendDnsPacket(packetBuffer, upstreamPort = 53) {
   return new Promise((resolve, reject) => {
@@ -32,16 +35,20 @@ const server = dns2.createServer({
   udp: true,
   tcp: true,
   handle: async (request, send, rinfo) => {
+    let output = null;
+
     try {
       const packet = request.toBuffer();
-      const response = await sendDnsPacket(packet);      
-      send(response);
+      const response = await sendDnsPacket(packet);
+      output = response; 
     } catch (err) {
       const failure = Packet.createResponseFromRequest(request);
       console.log(err);
       failure.header.rcode = 2;
-      send(failure);
+      output = failure;
     }
+    
+    send(output);
   },
 });
 
