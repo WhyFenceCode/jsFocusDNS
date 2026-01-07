@@ -34,7 +34,7 @@ const server = dns2.createServer({
   handle: async (request, send, rinfo) => {
     try {
       const packet = request.toBuffer();
-      const response = await sendDnsPacket(packet);   
+      const response = await sendDnsPacket(packet);      
       send(response);
     } catch (err) {
       const failure = Packet.createResponseFromRequest(request);
