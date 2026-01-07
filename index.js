@@ -1,33 +1,43 @@
 const dns2 = require('dns2');
+const dgram = require("dgram");
 
 const { Packet } = dns2;
 
-const options = {
-  nameServers: ['8.8.8.8'],
-  port: 53,
-  timeout: 2000,
-  retries: 2,
-};
+const upstreamHost = '8.8.8.8';
 
+function sendDnsPacket(packetBuffer, upstreamPort = 53) {
+  return new Promise((resolve, reject) => {
+    const socket = dgram.createSocket("udp4");
 
-const { UDPClient } = require('dns2');
-const upstreamDNS = UDPClient(options);
+    socket.once("message", (msg) => {
+      socket.close();
+      resolve(msg);
+    });
+
+    socket.once("error", (err) => {
+      socket.close();
+      reject(err);
+    });
+
+    socket.send(packetBuffer, upstreamPort, upstreamHost, (err) => {
+      if (err) {
+        socket.close();
+        reject(err);
+      }
+    });
+  });
+}
 
 const server = dns2.createServer({
   udp: true,
   tcp: true,
   handle: async (request, send, rinfo) => {
     try {
-      console.log(request);
-      const response = await upstreamDNS(request.packet);
-      console.log(response)
-      const originalId = request.header.id
-      response.header.id = originalId;
-      response.header.ra = 1;
+      const packet = request.toBuffer();
+      const response = await sendDnsPacket(packet);   
       send(response);
     } catch (err) {
       const failure = Packet.createResponseFromRequest(request);
-      console.log(failure);
       console.log(err);
       failure.header.rcode = 2;
       send(failure);
