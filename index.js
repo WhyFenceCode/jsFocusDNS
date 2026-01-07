@@ -1,5 +1,6 @@
 const dns2 = require('dns2');
 const dgram = require("dgram");
+const readline = require('node:readline');
 
 const { Packet } = dns2;
 const upstreamHost = '8.8.8.8';
@@ -8,6 +9,14 @@ const blockList = [
   'reddit.com'
 ];
 let isBlocking = false;
+let isBlockingStrict = false;
+
+const rl = readline.createInterface({
+  input: process.stdin,
+  output: process.stdout,
+});
+
+const delay = (ms) => new Promise(resolve => setTimeout(resolve, ms));
 
 function sendDnsPacket(packetBuffer, upstreamPort = 53) {
   return new Promise((resolve, reject) => {
@@ -30,6 +39,48 @@ function sendDnsPacket(packetBuffer, upstreamPort = 53) {
       }
     });
   });
+}
+
+function takeCliInput() {
+  rl.question(`>>>`, input => {
+    if (input == 'block_enable') enableBlock();
+    if (input == 'block_disable') disableBlock();
+    if (input == 'status') statusUpdateCLI();
+    if (input.startsWith('block_enable_for')){
+      try {
+        const parts = input.split(" ");
+        enableBlockFor(parts[1]);
+      } catch (err) {
+        console.log(err);
+      }
+    };
+    takeCliInput();
+  });
+}
+
+function enableBlock() {
+  isBlocking = true;
+  isBlockingStrict = true;
+}
+
+function disableBlock() {
+  isBlocking = false;
+  isBlockingStrict = false;
+}
+  
+
+async function enableBlockFor(time) {
+  isBlocking = true;
+  isBlockingStrict = false;
+  console.log(time)
+  await delay(time * 1000);
+  if (!isBlockingStrict) isBlocking = false;
+}
+
+function statusUpdateCLI() {
+  console.log("Blocking: " + isBlocking);
+  console.log("Timer Active " + !isBlockingStrict);
+  console.log("DNS Expected Upstream: " + upstreamHost);
 }
 
 function blockTest(request) {
@@ -79,10 +130,14 @@ server.on('requestError', (error) => {
 
 server.on('listening', () => {
   console.log(server.addresses());
+  takeCliInput();
 });
 
 server.on('close', () => {
-  console.log('server closed');
+  rl.close();
+  console.log('');
+  console.log('DNS Traffic Closed');
+  console.log('Server Safely Shut Down');
 });
 
 server.listen({
@@ -98,12 +153,22 @@ server.listen({
   },
 });
 
+//Safe Shutdown initiation
 process.on('SIGTERM', () => {
-  console.log('SIGTERM signal received.');
   server.close();
 });
 
 process.on('SIGINT', () => {
-  console.log('SIGINT signal received.');
   server.close();
+});
+
+//Skip normal RL kill and move straight to shutdown. Prevents multi CTRL+C
+rl.on('SIGINT', () => {
+  rl.close();
+  process.kill(process.pid, 'SIGINT');
+}); 
+
+rl.on('SIGTERM', () => {
+  rl.close();
+  process.kill(process.pid, 'SIGTERM');
 });
