@@ -6,7 +6,11 @@ const { Packet } = dns2;
 const upstreamHost = '8.8.8.8';
 
 const blockList = [
-  'reddit.com'
+  'youtube.com',
+  'instagram.com',
+  'reddit.com',
+  'steam.com',
+  'figma.com'  
 ];
 let isBlocking = false;
 let isBlockingStrict = false;
