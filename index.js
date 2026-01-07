@@ -2,23 +2,33 @@ const dns2 = require('dns2');
 
 const { Packet } = dns2;
 
-const resolveUpstream = new dns2({
-  dns: '8.8.8.8',
+const options = {
+  nameServers: ['8.8.8.8'],
   port: 53,
   timeout: 2000,
-  retries: 1,
-});
+  retries: 2,
+};
+
+
+const { UDPClient } = require('dns2');
+const upstreamDNS = UDPClient(options);
 
 const server = dns2.createServer({
   udp: true,
   tcp: true,
   handle: async (request, send, rinfo) => {
     try {
-      const response = await resolveUpstream(request);
+      console.log(request);
+      const response = await upstreamDNS(request.packet);
+      console.log(response)
+      const originalId = request.header.id
+      response.header.id = originalId;
       response.header.ra = 1;
       send(response);
     } catch (err) {
       const failure = Packet.createResponseFromRequest(request);
+      console.log(failure);
+      console.log(err);
       failure.header.rcode = 2;
       send(failure);
     }
@@ -52,4 +62,14 @@ server.listen({
     port: 53,
     address: "127.0.0.1",
   },
+});
+
+process.on('SIGTERM', () => {
+  console.log('SIGTERM signal received.');
+  server.close();
+});
+
+process.on('SIGINT', () => {
+  console.log('SIGINT signal received.');
+  server.close();
 });
